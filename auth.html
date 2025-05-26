@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase variables (will be initialized in the script below)
+        window.firebaseApp = null;
+        window.db = null;
+        window.auth = null;
+        window.currentUserId = null;
+
+        // Firebase Initialization and Auth Listener
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // MANDATORY: Get app ID and Firebase config from global variables
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+                if (Object.keys(firebaseConfig).length === 0) {
+                    console.error("Firebase configuration is missing. Please ensure __firebase_config is defined.");
+                    showCustomModal('Error', 'Firebase configuration is missing. Authentication will not work.');
+                    return;
+                }
+
+                window.firebaseApp = initializeApp(firebaseConfig);
+                window.auth = getAuth(window.firebaseApp);
+                window.db = getFirestore(window.firebaseApp);
+
+                // MANDATORY: Sign in with custom token or anonymously
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+
+                onAuthStateChanged(window.auth, (user) => {
+                    if (user) {
+                        window.currentUserId = user.uid;
+                        console.log("User is signed in:", user.uid);
+                        document.getElementById('user-id-display').textContent = `User ID: ${user.uid}`;
+                        document.getElementById('user-id-display').classList.remove('hidden');
+                    } else {
+                        window.currentUserId = null;
+                        console.log("No user is signed in.");
+                        document.getElementById('user-id-display').classList.add('hidden');
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                showCustomModal('Firebase Error', `Failed to initialize Firebase: ${error.message}`);
+            }
+        });
+
+        // Function to show custom modal (defined here to be accessible by Firebase init)
+        function showCustomModal(title, message) {
+            const customModal = document.getElementById('custom-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            customModal.classList.add('show');
+        }
+        window.showCustomModal = showCustomModal; // Make it globally accessible
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Dynamic background gradient */
+            background: linear-gradient(135deg, #a78bfa 0%, #818cf8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden; /* Prevent scrollbar from background animation */
+        }
+
+        /* Custom styles for form transition */
+        .form-container {
+            transition: all 0.5s ease-in-out;
+            transform-origin: center;
+        }
+
+        .form-hidden {
+            opacity: 0;
+            transform: translateY(20px);
+            pointer-events: none; /* Disable interactions when hidden */
+            position: absolute; /* Take out of flow for smooth transition */
+            width: 100%; /* Maintain width for positioning */
+        }
+
+        .form-visible {
+            opacity: 1;
+            transform: translateY(0);
+            position: relative; /* Bring back to flow when visible */
+        }
+
+        /* Custom modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+
+        /* Loading spinner */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #6366f1;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl border border-indigo-100 w-full max-w-md relative overflow-hidden">
+        <div class="flex flex-col items-center mb-6">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-indigo-600 mb-2">
+                <path d="M12 2L2 7L12 12L22 7L12 2ZM2 17L12 22L22 17L12 12L2 17Z" fill="currentColor"/>
+            </svg>
+            <h1 class="text-4xl font-extrabold text-gray-800">AuthFlow</h1>
+            <p class="text-gray-500 text-sm mt-1">Secure & Seamless Access</p>
+        </div>
+
+        <h2 id="form-title" class="text-3xl font-bold text-center text-gray-800 mb-6">Login</h2>
+
+        <form id="login-form" class="space-y-4 form-container form-visible">
+            <div>
+                <label for="login-email" class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" id="login-email" name="email" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="your@example.com" required>
+            </div>
+            <div>
+                <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="login-password" name="password" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="••••••••" required>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <input id="remember-me" name="remember-me" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label for="remember-me" class="ml-2 block text-sm text-gray-900">Remember me</label>
+                </div>
+                <a href="#" class="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition duration-200 ease-in-out">Forgot your password?</a>
+            </div>
+            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transform hover:scale-105 transition duration-300 ease-in-out">
+                Sign in
+            </button>
+        </form>
+
+        <form id="signup-form" class="space-y-4 form-container form-hidden">
+            <div>
+                <label for="signup-name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                <input type="text" id="signup-name" name="name" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="John Doe" required>
+            </div>
+            <div>
+                <label for="signup-email" class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" id="signup-email" name="email" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="your@example.com" required>
+            </div>
+            <div>
+                <label for="signup-password" class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" id="signup-password" name="password" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="••••••••" required>
+            </div>
+            <div>
+                <label for="signup-confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <input type="password" id="signup-confirm-password" name="confirm-password" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="••••••••" required>
+            </div>
+
+            <div class="relative">
+                <label for="signup-username" class="block text-sm font-medium text-gray-700">Username</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="signup-username" name="username" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 ease-in-out" placeholder="Choose a username">
+                    <button type="button" id="suggest-username-btn" class="flex-shrink-0 px-4 py-2 bg-purple-600 text-white rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transform hover:scale-105 transition duration-300 ease-in-out">
+                        Suggest Username ✨
+                    </button>
+                </div>
+                <div id="username-suggestions" class="mt-2 text-sm text-gray-600 space-y-1">
+                    </div>
+                <div id="username-loading-spinner" class="absolute right-2 top-1/2 -translate-y-1/2 hidden">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transform hover:scale-105 transition duration-300 ease-in-out">
+                Sign up
+            </button>
+        </form>
+
+        <p class="mt-6 text-center text-sm text-gray-600">
+            <span id="toggle-text">Don't have an account?</span>
+            <button id="toggle-form-btn" class="font-medium text-indigo-600 hover:text-indigo-500 ml-1 transition duration-200 ease-in-out">Sign up</button>
+        </p>
+
+        <p id="user-id-display" class="hidden mt-4 text-center text-xs text-gray-400 break-all">
+            </p>
+    </div>
+
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-semibold text-gray-800 mb-4"></h3>
+            <p id="modal-message" class="text-gray-600 mb-6"></p>
+            <button id="modal-close-btn" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                OK
+            </button>
+        </div>
+    </div>
+
+ <script src="js/auth.js" type="module"></script>
+</body>
+</html>
