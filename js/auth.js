@@ -1,7 +1,7 @@
 
         // Import Firebase functions (already imported in the head, but good practice for clarity in module scripts)
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "./furbase.js";
+        import { db, doc, setDoc } from "./furebase.js";
 
         const loginForm = document.getElementById('login-form');
         const signupForm = document.getElementById('signup-form');
